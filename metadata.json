@@ -1,0 +1,9 @@
+{
+  "uuid": "outlook-calendar@caio-hat",
+  "name": "Outlook Next Meeting",
+  "description": "Exibe sua próxima reunião do Outlook na barra e notifica 30 minutos antes",
+  "version": "1.0.0",
+  "max-instances": "1",
+  "icon": "x-office-calendar",
+  "contributors": "caio-hat"
+}

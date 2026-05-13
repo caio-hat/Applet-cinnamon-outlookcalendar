@@ -1,0 +1,7 @@
+/* Outlook Next Meeting applet
+   The panel label inherits the panel's default font/color.
+   Adjust only what you need. */
+
+.applet-label {
+    padding-left: 4px;
+}

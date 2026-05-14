@@ -5,7 +5,7 @@
         "main": {
             "type": "page",
             "title": "Geral",
-            "sections": ["calendars-section", "panel-section"]
+            "sections": ["calendars-section", "panel-section", "privacy-section"]
         },
         "advanced": {
             "type": "page",
@@ -21,6 +21,11 @@
             "type": "section",
             "title": "Painel e Popup",
             "keys": ["show-in-panel", "label-max-chars", "show-tentative"]
+        },
+        "privacy-section": {
+            "type": "section",
+            "title": "Privacidade",
+            "keys": ["hidden-mode"]
         },
         "notifications-section": {
             "type": "section",
@@ -47,7 +52,7 @@
     "show-in-panel": {
         "type": "switch",
         "default": true,
-        "description": "Mostrar proxima reuniao na barra"
+        "description": "Exibir texto na barra (desligue para Modo Sem Exibicao - so icone)"
     },
     "label-max-chars": {
         "type": "spinbutton",
@@ -62,6 +67,11 @@
         "type": "switch",
         "default": true,
         "description": "Exibir reunioes pendentes/tentativas no popup"
+    },
+    "hidden-mode": {
+        "type": "switch",
+        "default": false,
+        "description": "Modo Oculto: mostra apenas o tempo restante (countdown), omite nome e horario da reuniao na barra. Util para compartilhamento ou gravacao de tela."
     },
     "notify-enabled": {
         "type": "switch",

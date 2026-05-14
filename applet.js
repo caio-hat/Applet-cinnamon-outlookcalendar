@@ -19,9 +19,9 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
         this._instanceId       = instanceId;
         this._appletDir        = metadata.path;
         this._allMeetings      = [];
-        this._nextMeeting      = null;  // popup header: in-progress or first future
-        this._inProgress       = null;  // meeting happening right now
-        this._panelMeeting     = null;  // panel bar: prefers accepted over tentative
+        this._nextMeeting      = null;
+        this._inProgress       = null;
+        this._panelMeeting     = null;
         this._conflictKeys     = new Set();
         this._notifiedIds      = new Set();
         this._notifiedConflicts = new Set();
@@ -31,6 +31,7 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
         this.settings = new Settings.AppletSettings(this, UUID, instanceId);
         this.settings.bind("calendars",       "calendars",      () => this._onCalendarsChanged());
         this.settings.bind("show-in-panel",   "showInPanel",    () => this._onShowInPanelChanged());
+        this.settings.bind("hidden-mode",     "hiddenMode",     () => this._onHiddenModeChanged());
         this.settings.bind("label-max-chars", "labelMaxChars",  () => this._updateDisplay());
         this.settings.bind("notify-enabled",  "notifyEnabled");
         this.settings.bind("notify-before",   "notifyBefore");
@@ -74,7 +75,6 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
         this._menu = new Applet.AppletPopupMenu(this, this._orientation);
         this._menuManager.addMenu(this._menu);
 
-        // Next / in-progress meeting header
         this._nextItem = new PopupMenu.PopupMenuItem("Carregando...", { reactive: false });
         this._nextItem.actor.add_style_class_name("outlook-next-item");
         this._nextItem.label.clutter_text.set_line_wrap(true);
@@ -82,7 +82,6 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
 
         this._menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-        // Time-window sections
         this._sub24 = new PopupMenu.PopupSubMenuMenuItem("Proximas 24 horas");
         this._sub3d = new PopupMenu.PopupSubMenuMenuItem("Proximos 3 dias");
         this._sub7d = new PopupMenu.PopupSubMenuMenuItem("Proximos 7 dias");
@@ -93,8 +92,17 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
 
         this._menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-        // Toggles
-        this._showSwitch = new PopupMenu.PopupSwitchMenuItem("Exibir na barra", this.showInPanel !== false);
+        // Privacy toggles
+        this._hiddenSwitch = new PopupMenu.PopupSwitchMenuItem("🔒 Modo oculto (so countdown)", this.hiddenMode === true);
+        this._hiddenSwitch.connect("toggled", (item, state) => {
+            if (this._suppressToggle || state === this.hiddenMode) return;
+            this.hiddenMode = state;
+            this.settings.setValue("hidden-mode", state);
+            this._updateDisplay();
+        });
+        this._menu.addMenuItem(this._hiddenSwitch);
+
+        this._showSwitch = new PopupMenu.PopupSwitchMenuItem("Exibir texto na barra", this.showInPanel !== false);
         this._showSwitch.connect("toggled", (item, state) => {
             if (this._suppressToggle || state === this.showInPanel) return;
             this.showInPanel = state;
@@ -136,15 +144,16 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
         this._notifyTimer = Mainloop.timeout_add_seconds(NOTIFY_CHECK_S, () => {
             this._checkUpcomingNotification();
             this._checkConflictNotification();
-            this._updateNextItem();   // live countdown tick
-            this._updateDisplay();    // keep "ha X min" fresh in panel
+            this._updateNextItem();
+            this._updateDisplay();
             return true;
         });
     }
 
     _onCalendarsChanged()    { this._fetchMeetings(); }
-    _onShowInPanelChanged()  { this._syncSwitch(this._showSwitch,     this.showInPanel);    this._updateDisplay(); }
-    _onShowTentativeChanged(){ this._syncSwitch(this._tentativeSwitch,this.showTentative);  this._renderMenu(); this._updateDisplay(); }
+    _onShowInPanelChanged()  { this._syncSwitch(this._showSwitch,      this.showInPanel);    this._updateDisplay(); }
+    _onHiddenModeChanged()   { this._syncSwitch(this._hiddenSwitch,    this.hiddenMode);     this._updateDisplay(); }
+    _onShowTentativeChanged(){ this._syncSwitch(this._tentativeSwitch, this.showTentative);  this._renderMenu(); this._updateDisplay(); }
 
     _syncSwitch(sw, value) {
         if (!sw || sw.state === value) return;
@@ -262,15 +271,12 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
             else if (s <= h168)      { future.push(m); }
         }
 
-        // Popup header = in-progress OR first future
         this._nextMeeting = this._inProgress || (future.length > 0 ? future[0] : null);
 
-        // Panel prefers accepted over tentative
         let nextAccepted  = future.find(m => m.status !== "tentative") || null;
         let nextTentative = future.find(m => m.status === "tentative")  || null;
         this._panelMeeting = this._inProgress || nextAccepted || nextTentative;
 
-        // Conflict detection across all non-past meetings
         this._conflictKeys = this._detectConflicts(
             this._inProgress ? [this._inProgress, ...future] : future
         );
@@ -378,21 +384,50 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
         if (this._lastError) {
             this.hide_applet_label(false); this.set_applet_label("⚠ Outlook"); return;
         }
+
+        // Mode 1: Sem exibicao (most restrictive - just icon, nothing else)
+        if (!this.showInPanel) {
+            this.hide_applet_label(true);
+            this.set_applet_tooltip("Modo Sem Exibicao - clique no icone para ver reunioes");
+            return;
+        }
+
         let m    = this._panelMeeting;
         let live = this._inProgress;
+
         if (!m) {
             this.hide_applet_label(false);
-            this.set_applet_label("Sem reunioes");
+            this.set_applet_label(this.hiddenMode ? "—" : "Sem reunioes");
             this.set_applet_tooltip("Nenhuma reuniao nas proximas 7 dias");
             return;
         }
-        if (!this.showInPanel) {
-            this.hide_applet_label(true);
-            this.set_applet_tooltip("Texto oculto - clique para ver reunioes");
-            return;
-        }
+
         this.hide_applet_label(false);
 
+        // Mode 2: Modo Oculto (privacy - countdown only, no meeting name/time)
+        if (this.hiddenMode) {
+            let label, tooltip;
+            if (live) {
+                let mins = Math.round((Date.now() - new Date(live.start).getTime()) / 60000);
+                label   = "◎ em curso (ha " + mins + " min)";
+                tooltip = "Modo Oculto - reuniao em andamento\nClique no icone para ver detalhes";
+            } else {
+                let cd = this._countdown(m.start);  // "em 3h 56min" / "em 12 min"
+                label   = "⏱ " + cd;
+                tooltip = "Modo Oculto - proxima reuniao " + cd + "\nClique no icone para ver detalhes";
+            }
+            if (this._conflictKeys.has(this._mkey(live || m))) {
+                label = "⚠ " + label;
+                tooltip = "Conflito de horario!\n" + tooltip;
+            }
+            let max = this.labelMaxChars || 40;
+            if (label.length > max) label = label.slice(0, Math.max(1, max - 1)) + "…";
+            this.set_applet_label(label);
+            this.set_applet_tooltip(tooltip);
+            return;
+        }
+
+        // Mode 3: Normal
         let label, tooltip;
         if (live) {
             let mins = Math.round((Date.now() - new Date(live.start).getTime()) / 60000);
@@ -406,7 +441,6 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
                       this._fmtFull(m.start) + " - " + (m.end ? this._fmtTime(m.end) : "?");
         }
 
-        // Conflict badge in panel
         if (this._conflictKeys.has(this._mkey(live || m))) {
             label   = "⚠ " + label;
             tooltip = "CONFLITO DE HORARIO!\n" + tooltip;

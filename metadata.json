@@ -1,9 +1,10 @@
 {
   "uuid": "outlook-calendar@caio-hat",
   "name": "Outlook Next Meeting",
-  "description": "Mostra proximas reunioes do Outlook na barra, agrupadas por janela de tempo, com notificacao antes",
-  "version": "2.0.0",
+  "description": "Shows upcoming Outlook meetings in the panel, grouped by time window, with reminders.",
+  "version": "2.1.0",
   "max-instances": "1",
   "icon": "x-office-calendar",
-  "contributors": "caio-hat"
+  "contributors": "caio-hat",
+  "gettext-domain": "outlook-calendar@caio-hat"
 }

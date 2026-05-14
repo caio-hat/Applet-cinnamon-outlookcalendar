@@ -1,11 +1,20 @@
 #!/usr/bin/env bash
-# setup.sh - installs the Outlook Next Meeting Cinnamon applet
+# setup.sh - installs the Outlook Next Meeting Cinnamon applet locally.
+# Layout follows cinnamon-spices-applets conventions:
+#   ./outlook-calendar@caio-hat/files/outlook-calendar@caio-hat/<files>
 set -euo pipefail
 
 APPLET_UUID="outlook-calendar@caio-hat"
 APPLET_INSTALL_DIR="$HOME/.local/share/cinnamon/applets/$APPLET_UUID"
 LOCALE_BASE_DIR="$HOME/.local/share/locale"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_DIR="$SCRIPT_DIR/$APPLET_UUID/files/$APPLET_UUID"
+
+if [ ! -d "$SOURCE_DIR" ]; then
+    echo "ERROR: source directory not found: $SOURCE_DIR"
+    echo "Make sure you are running setup.sh from the repository root."
+    exit 1
+fi
 
 echo "================================================"
 echo "  Outlook Calendar Applet - Setup"
@@ -23,8 +32,7 @@ else
     echo "STEP 1: Installing Python deps..."
     installed=0
     if command -v apt-get >/dev/null 2>&1; then
-        echo "  Trying via apt (recommended on Mint/Ubuntu)..."
-        echo "  Will ask for sudo password:"
+        echo "  Trying via apt (recommended on Mint/Ubuntu); may prompt for sudo:"
         if sudo apt-get install -y python3-icalendar python3-recurring-ical-events python3-dateutil 2>/dev/null; then
             if have_py_deps; then
                 echo "  OK - installed via apt."
@@ -46,19 +54,18 @@ else
         echo ""
         echo "  WARNING: could not install icalendar/recurring-ical-events automatically."
         echo "  The applet will work, but RECURRING meetings will NOT appear."
-        echo "  Manual install:"
-        echo "    sudo apt install python3-icalendar python3-recurring-ical-events"
+        echo "  Manual install:  sudo apt install python3-icalendar python3-recurring-ical-events"
         echo ""
     fi
 fi
 echo ""
 
-# ── 2) Compile translations (po/*.po → .mo) ────────────────────────────────────────────
+# ── 2) Compile translations (po/*.po → .mo) ─────────────────────────────────────────────
 echo "STEP 2: Compiling translations..."
-if [ -d "$SCRIPT_DIR/po" ]; then
+if [ -d "$SOURCE_DIR/po" ]; then
     if command -v msgfmt >/dev/null 2>&1; then
         compiled=0
-        for po in "$SCRIPT_DIR"/po/*.po; do
+        for po in "$SOURCE_DIR"/po/*.po; do
             [ -f "$po" ] || continue
             lang="$(basename "$po" .po)"
             mo_dir="$LOCALE_BASE_DIR/$lang/LC_MESSAGES"
@@ -78,7 +85,7 @@ if [ -d "$SCRIPT_DIR/po" ]; then
         echo "  Translations skipped (applet will use English source strings)."
     fi
 else
-    echo "  (no po/ directory)"
+    echo "  (no po/ directory in source)"
 fi
 echo ""
 
@@ -86,11 +93,11 @@ echo ""
 echo "STEP 3: Installing applet to $APPLET_INSTALL_DIR..."
 mkdir -p "$APPLET_INSTALL_DIR"
 for f in metadata.json applet.js stylesheet.css settings-schema.json fetch_meetings.py; do
-    cp "$SCRIPT_DIR/$f" "$APPLET_INSTALL_DIR/"
+    cp "$SOURCE_DIR/$f" "$APPLET_INSTALL_DIR/"
 done
-# Also copy po/ for reference (some Cinnamon versions can read it directly).
-if [ -d "$SCRIPT_DIR/po" ]; then
-    cp -r "$SCRIPT_DIR/po" "$APPLET_INSTALL_DIR/"
+if [ -d "$SOURCE_DIR/po" ]; then
+    rm -rf "$APPLET_INSTALL_DIR/po"
+    cp -r "$SOURCE_DIR/po" "$APPLET_INSTALL_DIR/"
 fi
 chmod +x "$APPLET_INSTALL_DIR/fetch_meetings.py"
 echo "  OK."
@@ -101,30 +108,19 @@ echo "================================================"
 echo "  Setup complete!"
 echo "================================================"
 echo ""
-echo "Next steps:"
+echo "To apply changes:  cinnamon --replace &"
 echo ""
-echo "  1) Add the applet to the panel:"
-echo "     - Right-click the Cinnamon panel"
-echo "     - 'Add applets to the panel' (or 'Applets')"
-echo "     - Look for 'Outlook Next Meeting' and click '+'"
+echo "Add the applet:"
+echo "  Right-click panel -> 'Add applets to the panel' -> find 'Outlook Next Meeting' -> +"
 echo ""
-echo "  2) Configure your calendars:"
-echo "     - Right-click the applet in the panel  -> 'Configure...'"
-echo "       (or click the applet -> Settings)"
-echo "     - 'General' tab > Calendars > '+' button"
-echo "     - Add name, ICS URL, color (hex like #1e88e5) and check 'Active'"
+echo "Configure:"
+echo "  Right-click the applet -> 'Configure...' (or click the applet -> Settings)"
 echo ""
-echo "  Apply changes (live):  cinnamon --replace &"
-echo ""
-echo "How to get the ICS URL (Outlook on the web):"
-echo "  Calendar -> Settings (gear) -> View all Outlook settings"
-echo "  -> Calendar -> Shared calendars -> Publish a calendar"
-echo "  -> pick the calendar -> Publish -> copy the ICS link"
+echo "Debug logs (Cinnamon does NOT use journalctl --user by default):"
+echo "  tail -f ~/.xsession-errors                # X11 sessions"
+echo "  journalctl _COMM=cinnamon -f              # newer systems"
+echo "  cinnamon-looking-glass                    # GUI (Alt+F2 'lg')"
 echo ""
 echo "Translations:"
-echo "  This applet detects your system language ($LANG) automatically."
-echo "  To contribute a translation, see  po/outlook-calendar@caio-hat.pot"
-echo ""
-echo "To update later:"
-echo "  cd $SCRIPT_DIR && git pull && bash setup.sh"
+echo "  Auto-detected via \$LANG. Contribute new ones via po/*.pot (see header)."
 echo ""

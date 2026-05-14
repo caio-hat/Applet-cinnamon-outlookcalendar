@@ -1,0 +1,10 @@
+{
+  "uuid": "outlook-calendar@caio-hat",
+  "name": "Outlook Next Meeting",
+  "description": "Shows upcoming Outlook meetings in the panel, grouped by time window, with reminders.",
+  "version": "2.2.0",
+  "max-instances": "1",
+  "icon": "x-office-calendar",
+  "contributors": "caio-hat",
+  "gettext-domain": "outlook-calendar@caio-hat"
+}

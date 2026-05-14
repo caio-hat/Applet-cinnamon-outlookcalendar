@@ -42,10 +42,10 @@
         "type": "list",
         "description": "Calendarios Outlook (URLs ICS publicas)",
         "columns": [
-            { "id": "name",    "title": "Nome",    "type": "string" },
-            { "id": "url",     "title": "URL ICS", "type": "string" },
-            { "id": "color",   "title": "Cor",     "type": "colorchooser" },
-            { "id": "enabled", "title": "Ativo",   "type": "boolean" }
+            { "id": "name",    "title": "Nome",       "type": "string" },
+            { "id": "url",     "title": "URL ICS",    "type": "string" },
+            { "id": "color",   "title": "Cor (hex)",  "type": "string" },
+            { "id": "enabled", "title": "Ativo",      "type": "boolean" }
         ],
         "default": []
     },

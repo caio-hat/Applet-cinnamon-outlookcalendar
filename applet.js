@@ -92,8 +92,7 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
 
         this._menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-        // Privacy toggles
-        this._hiddenSwitch = new PopupMenu.PopupSwitchMenuItem("🔒 Modo oculto (so countdown)", this.hiddenMode === true);
+        this._hiddenSwitch = new PopupMenu.PopupSwitchMenuItem("Modo oculto (so countdown)", this.hiddenMode === true);
         this._hiddenSwitch.connect("toggled", (item, state) => {
             if (this._suppressToggle || state === this.hiddenMode) return;
             this.hiddenMode = state;
@@ -125,9 +124,10 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
         refresh.connect("activate", () => this._fetchMeetings());
         this._menu.addMenuItem(refresh);
 
+        // xlet-settings applet <uuid> <instance-id>  (space-separated, not colon)
         let configure = new PopupMenu.PopupMenuItem("⚙  Configuracoes");
         configure.connect("activate", () =>
-            Util.spawnCommandLine("xlet-settings applet " + UUID + ":" + this._instanceId));
+            Util.spawnCommandLine("xlet-settings applet " + UUID + " " + this._instanceId));
         this._menu.addMenuItem(configure);
     }
 
@@ -385,7 +385,7 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
             this.hide_applet_label(false); this.set_applet_label("⚠ Outlook"); return;
         }
 
-        // Mode 1: Sem exibicao (most restrictive - just icon, nothing else)
+        // Mode 1: Sem exibicao (most restrictive)
         if (!this.showInPanel) {
             this.hide_applet_label(true);
             this.set_applet_tooltip("Modo Sem Exibicao - clique no icone para ver reunioes");
@@ -404,7 +404,7 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
 
         this.hide_applet_label(false);
 
-        // Mode 2: Modo Oculto (privacy - countdown only, no meeting name/time)
+        // Mode 2: Modo Oculto (countdown only, no meeting names)
         if (this.hiddenMode) {
             let label, tooltip;
             if (live) {
@@ -412,12 +412,12 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
                 label   = "◎ em curso (ha " + mins + " min)";
                 tooltip = "Modo Oculto - reuniao em andamento\nClique no icone para ver detalhes";
             } else {
-                let cd = this._countdown(m.start);  // "em 3h 56min" / "em 12 min"
+                let cd = this._countdown(m.start);
                 label   = "⏱ " + cd;
                 tooltip = "Modo Oculto - proxima reuniao " + cd + "\nClique no icone para ver detalhes";
             }
             if (this._conflictKeys.has(this._mkey(live || m))) {
-                label = "⚠ " + label;
+                label   = "⚠ " + label;
                 tooltip = "Conflito de horario!\n" + tooltip;
             }
             let max = this.labelMaxChars || 40;

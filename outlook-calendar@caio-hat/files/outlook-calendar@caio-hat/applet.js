@@ -3,8 +3,6 @@
 //   outlook-calendar@caio-hat/files/outlook-calendar@caio-hat/applet.js
 //
 // Cinnamon API compatibility: SpiderMonkey 102 / 115 / 128 / 140.
-// No top-level await, no optional chaining in hot paths, no class fields
-// outside constructor.
 
 const Applet    = imports.ui.applet;
 const Gettext   = imports.gettext;
@@ -19,7 +17,6 @@ const UUID           = "outlook-calendar@caio-hat";
 const NOTIFY_CHECK_S = 30;
 const LEGACY_CONFIG  = GLib.get_home_dir() + "/.config/outlook-calendar-applet/config.json";
 
-// ── i18n setup ───────────────────────────────────────────────────────────────────
 Gettext.bindtextdomain(UUID, GLib.get_home_dir() + "/.local/share/locale");
 function _(s) { return Gettext.dgettext(UUID, s); }
 function _f(s) {
@@ -146,36 +143,76 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
         refresh.connect("activate", () => this._fetchMeetings());
         this._menu.addMenuItem(refresh);
 
-        // Plain-text label (no unicode prefix) to avoid theme/font quirks
-        // that have been reported to swallow click events on some setups.
         let configure = new PopupMenu.PopupMenuItem(_("Settings"));
         configure.connect("activate", () => this._openSettings());
         this._menu.addMenuItem(configure);
     }
 
+    // Open Cinnamon's per-applet settings dialog.
+    // Diagnostic version: uses GLib.spawn_async directly with explicit env
+    // and child_watch_add to capture the exit status. If xlet-settings exits
+    // quickly with a non-zero status, falls back to cinnamon-settings.
     _openSettings() {
-        let id = (this.instance_id != null) ? this.instance_id : (this._instanceId != null ? this._instanceId : "");
-        let argv = ["xlet-settings", "applet", UUID, String(id)];
+        let id = String(this.instance_id != null ? this.instance_id : (this._instanceId != null ? this._instanceId : ""));
+        let argv = ["xlet-settings", "applet", UUID, id];
         global.log("[" + UUID + "] _openSettings argv=" + argv.join(" "));
-        this._menu.close(true);
+        this._menu.close(false);
+
+        let startedAt = GLib.get_monotonic_time();
+        let envp = GLib.get_environ();
+        let success = false;
+        let pid = 0;
+
         try {
-            Util.spawn(argv);
+            [success, pid] = GLib.spawn_async(
+                null,
+                argv,
+                envp,
+                GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD,
+                null
+            );
+            global.log("[" + UUID + "] spawn_async returned success=" + success + " pid=" + pid);
         } catch (e) {
-            global.logError("[" + UUID + "] Util.spawn failed: " + e);
-            try { Util.spawnCommandLine(argv.join(" ")); }
-            catch (e2) {
-                global.logError("[" + UUID + "] spawnCommandLine also failed: " + e2);
+            global.logError("[" + UUID + "] spawn_async threw: " + e);
+            this._openSettingsFallback("spawn_async threw: " + e);
+            return;
+        }
+
+        if (!success || !pid) {
+            global.logError("[" + UUID + "] spawn_async failure (success=" + success + " pid=" + pid + ")");
+            this._openSettingsFallback("spawn_async returned failure");
+            return;
+        }
+
+        GLib.child_watch_add(GLib.PRIORITY_DEFAULT, pid, (childPid, status) => {
+            let elapsedMs = Math.round((GLib.get_monotonic_time() - startedAt) / 1000);
+            global.log("[" + UUID + "] xlet-settings pid=" + childPid + " exited status=" + status + " after " + elapsedMs + "ms");
+            GLib.spawn_close_pid(childPid);
+            // If xlet-settings died fast with non-zero status, the window
+            // never showed: try cinnamon-settings as a fallback.
+            if (status !== 0 && elapsedMs < 1500) {
+                this._openSettingsFallback("xlet-settings exit status=" + status + " in " + elapsedMs + "ms");
+            }
+        });
+    }
+
+    _openSettingsFallback(reason) {
+        global.log("[" + UUID + "] fallback triggered (" + reason + "), opening cinnamon-settings applets " + UUID);
+        try {
+            Util.spawn(["cinnamon-settings", "applets", UUID]);
+        } catch (e) {
+            global.logError("[" + UUID + "] cinnamon-settings fallback failed: " + e);
+            try {
                 Util.spawn(["notify-send", "--urgency=critical",
                             "--app-name=Outlook Calendar",
                             _("Settings"),
-                            "xlet-settings spawn failed: " + e2]);
-            }
+                            "Failed to open settings.\n" + reason + "\n" + e]);
+            } catch (_unused) { /* ignore */ }
         }
     }
 
     on_applet_clicked(_e) { this._menu.toggle(); }
 
-    // ── Timers ──────────────────────────────────────────────────────────────────────
     _startRefreshTimer() {
         if (this._refreshTimer) {
             Mainloop.source_remove(this._refreshTimer);
@@ -214,7 +251,6 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
         this._suppressToggle = false;
     }
 
-    // ── Fetch ───────────────────────────────────────────────────────────────────────
     _fetchMeetings() {
         let scriptPath = this._appletDir + "/fetch_meetings.py";
         try {
@@ -267,7 +303,6 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
         }
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────────────────────
     _fmtTime(iso) {
         let d = new Date(iso);
         return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
@@ -309,7 +344,6 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
         return keys;
     }
 
-    // ── Render ──────────────────────────────────────────────────────────────────────
     _renderMenu() {
         let now  = Date.now();
         let h24  = now + 24 * 3600 * 1000;
@@ -433,7 +467,6 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
         return item;
     }
 
-    // ── Panel label ─────────────────────────────────────────────────────────────
     _updateDisplay() {
         if (this._lastError) {
             this.hide_applet_label(false); this.set_applet_label("⚠ Outlook"); return;
@@ -503,7 +536,6 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
         this.set_applet_tooltip(tooltip);
     }
 
-    // ── Notifications ───────────────────────────────────────────────────────────
     _checkUpcomingNotification() {
         if (!this.notifyEnabled || this._inProgress) return;
         let m = this._panelMeeting;
@@ -541,7 +573,6 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
         this._notifiedConflicts.add(gKey);
     }
 
-    // ── Cleanup ────────────────────────────────────────────────────────────────────
     on_applet_removed_from_panel() {
         if (this._refreshTimer) {
             Mainloop.source_remove(this._refreshTimer);

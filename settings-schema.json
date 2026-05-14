@@ -1,0 +1,84 @@
+{
+    "layout": {
+        "type": "layout",
+        "pages": ["main", "advanced"],
+        "main": {
+            "type": "page",
+            "title": "Geral",
+            "sections": ["calendars-section", "panel-section"]
+        },
+        "advanced": {
+            "type": "page",
+            "title": "Avancado",
+            "sections": ["notifications-section", "refresh-section"]
+        },
+        "calendars-section": {
+            "type": "section",
+            "title": "Calendarios",
+            "keys": ["calendars"]
+        },
+        "panel-section": {
+            "type": "section",
+            "title": "Painel",
+            "keys": ["show-in-panel", "label-max-chars"]
+        },
+        "notifications-section": {
+            "type": "section",
+            "title": "Notificacoes",
+            "keys": ["notify-enabled", "notify-before"]
+        },
+        "refresh-section": {
+            "type": "section",
+            "title": "Atualizacao",
+            "keys": ["refresh-interval"]
+        }
+    },
+    "calendars": {
+        "type": "list",
+        "description": "Calendarios Outlook (URLs ICS publicas)",
+        "columns": [
+            { "id": "name",    "title": "Nome",    "type": "string" },
+            { "id": "url",     "title": "URL ICS", "type": "string" },
+            { "id": "color",   "title": "Cor",     "type": "colorchooser" },
+            { "id": "enabled", "title": "Ativo",   "type": "boolean" }
+        ],
+        "default": []
+    },
+    "show-in-panel": {
+        "type": "switch",
+        "default": true,
+        "description": "Mostrar proxima reuniao na barra"
+    },
+    "label-max-chars": {
+        "type": "spinbutton",
+        "default": 40,
+        "min": 10,
+        "max": 100,
+        "step": 1,
+        "units": "caracteres",
+        "description": "Tamanho maximo do texto na barra"
+    },
+    "notify-enabled": {
+        "type": "switch",
+        "default": true,
+        "description": "Enviar notificacao antes da reuniao"
+    },
+    "notify-before": {
+        "type": "spinbutton",
+        "default": 30,
+        "min": 1,
+        "max": 120,
+        "step": 1,
+        "units": "minutos",
+        "description": "Antecedencia da notificacao"
+    },
+    "refresh-interval": {
+        "type": "spinbutton",
+        "default": 5,
+        "min": 1,
+        "max": 60,
+        "step": 1,
+        "units": "minutos",
+        "description": "Intervalo de atualizacao do calendario"
+    }
+}

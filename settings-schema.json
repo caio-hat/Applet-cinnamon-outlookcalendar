@@ -5,7 +5,7 @@
         "main": {
             "type": "page",
             "title": "Geral",
-            "sections": ["calendars-section", "panel-section"]
+            "sections": ["calendars-section", "panel-section", "privacy-section"]
         },
         "advanced": {
             "type": "page",
@@ -19,13 +19,18 @@
         },
         "panel-section": {
             "type": "section",
-            "title": "Painel",
-            "keys": ["show-in-panel", "label-max-chars"]
+            "title": "Painel e Popup",
+            "keys": ["show-in-panel", "label-max-chars", "show-tentative"]
+        },
+        "privacy-section": {
+            "type": "section",
+            "title": "Privacidade",
+            "keys": ["hidden-mode"]
         },
         "notifications-section": {
             "type": "section",
             "title": "Notificacoes",
-            "keys": ["notify-enabled", "notify-before"]
+            "keys": ["notify-enabled", "notify-before", "notify-conflicts"]
         },
         "refresh-section": {
             "type": "section",
@@ -47,7 +52,7 @@
     "show-in-panel": {
         "type": "switch",
         "default": true,
-        "description": "Mostrar proxima reuniao na barra"
+        "description": "Exibir texto na barra (desligue para Modo Sem Exibicao - so icone)"
     },
     "label-max-chars": {
         "type": "spinbutton",
@@ -58,10 +63,20 @@
         "units": "caracteres",
         "description": "Tamanho maximo do texto na barra"
     },
+    "show-tentative": {
+        "type": "switch",
+        "default": true,
+        "description": "Exibir reunioes pendentes/tentativas no popup"
+    },
+    "hidden-mode": {
+        "type": "switch",
+        "default": false,
+        "description": "Modo Oculto: mostra apenas o tempo restante (countdown), omite nome e horario da reuniao na barra. Util para compartilhamento ou gravacao de tela."
+    },
     "notify-enabled": {
         "type": "switch",
         "default": true,
-        "description": "Enviar notificacao antes da reuniao"
+        "description": "Notificar antes da reuniao"
     },
     "notify-before": {
         "type": "spinbutton",
@@ -71,6 +86,11 @@
         "step": 1,
         "units": "minutos",
         "description": "Antecedencia da notificacao"
+    },
+    "notify-conflicts": {
+        "type": "switch",
+        "default": true,
+        "description": "Notificar quando houver conflito de horarios (urgencia critica)"
     },
     "refresh-interval": {
         "type": "spinbutton",

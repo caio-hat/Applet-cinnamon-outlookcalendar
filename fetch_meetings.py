@@ -1,35 +1,15 @@
 #!/usr/bin/env python3
 """Fetch upcoming meetings from one or more Outlook ICS URLs.
 
-Reads a JSON array of calendars from stdin:
-  [
-    {"name": "Trabalho", "url": "https://...", "color": "#1e88e5", "enabled": true},
-    ...
-  ]
+Reads JSON array of calendars from stdin:
+  [{"name": "...", "url": "https://...", "color": "#1e88e5", "enabled": true}, ...]
 
-Outputs to stdout (one JSON object):
-  {
-    "meetings": [
-      {
-        "subject": "...",
-        "start":   "2024-01-15T14:30:00Z",
-        "end":     "2024-01-15T15:00:00Z",
-        "location": "...",
-        "join_url": "https://teams...",
-        "calendar_name":  "Trabalho",
-        "calendar_color": "#1e88e5",
-        "uid": "..."
-      },
-      ...
-    ],
-    "warnings": ["..."]
-  }
-  or
-  {"error": "..."}
+Outputs JSON to stdout:
+  {"meetings": [{"subject", "start", "end", "location", "join_url",
+                  "status",  "calendar_name", "calendar_color", "uid"}, ...]}
+  or {"error": "..."}
 
-Note: requires python3-icalendar + python3-recurring-ical-events to fully
-expand recurring events (RRULE). Falls back to a minimal parser that does
-NOT expand recurrences (so weekly meetings will be missing).
+status values: "accepted" | "tentative" | "free"
 """
 
 import json
@@ -43,7 +23,6 @@ LEGACY_CONFIG_FILE = os.path.expanduser(
     "~/.config/outlook-calendar-applet/config.json"
 )
 
-# URLs typically embedded in Outlook event bodies for meeting join links
 JOIN_URL_RE = re.compile(
     r'https?://(?:'
     r'teams\.microsoft\.com/l/meetup-join/[^\s<>"\'\\\]\)]+|'
@@ -57,13 +36,10 @@ JOIN_URL_RE = re.compile(
 )
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────
-
 def _to_utc(value):
     if isinstance(value, datetime):
-        if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc)
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None \
+               else value.astimezone(timezone.utc)
     if isinstance(value, date):
         return datetime(value.year, value.month, value.day, tzinfo=timezone.utc)
     return None
@@ -86,16 +62,42 @@ def _fetch_ics(url, timeout=20):
         return resp.read()
 
 
-# ── Parsers ───────────────────────────────────────────────────────────────
+def _event_status_icalendar(component):
+    """Extract meeting status from icalendar component."""
+    busy = str(component.get("X-MICROSOFT-CDO-BUSYSTATUS", "") or "").strip().upper()
+    if busy == "TENTATIVE":
+        return "tentative"
+    if busy in ("BUSY", "OOF"):
+        return "accepted"
+    if busy == "FREE":
+        return "free"
+    std = str(component.get("STATUS", "") or "").strip().upper()
+    if std == "TENTATIVE":
+        return "tentative"
+    return "accepted"
+
+
+def _event_status_builtin(block, get_fn):
+    """Extract meeting status from raw ICS block."""
+    busy = get_fn("X-MICROSOFT-CDO-BUSYSTATUS").upper()
+    if busy == "TENTATIVE":
+        return "tentative"
+    if busy in ("BUSY", "OOF"):
+        return "accepted"
+    if busy == "FREE":
+        return "free"
+    std = get_fn("STATUS").upper()
+    if std == "TENTATIVE":
+        return "tentative"
+    return "accepted"
+
 
 def _parse_icalendar(ics_bytes, calendar, now, window_end):
-    """Parse using icalendar; expand recurring events via recurring_ical_events."""
     from icalendar import Calendar
     cal = Calendar.from_ical(ics_bytes)
 
     try:
         import recurring_ical_events
-        # between() returns event INSTANCES (recurrences expanded)
         components = recurring_ical_events.of(cal).between(now, window_end)
         recurring_ok = True
     except ImportError:
@@ -104,20 +106,14 @@ def _parse_icalendar(ics_bytes, calendar, now, window_end):
 
     events = []
     for component in components:
-        status = str(component.get("STATUS", "")).upper()
-        if status == "CANCELLED":
+        if str(component.get("STATUS", "")).upper() == "CANCELLED":
             continue
-
         dtstart = component.get("DTSTART")
-        if not dtstart:
+        if not dtstart or not isinstance(dtstart.dt, datetime):
             continue
-        if not isinstance(dtstart.dt, datetime):
-            continue  # skip all-day
-
         start_dt = _to_utc(dtstart.dt)
         dtend = component.get("DTEND")
         end_dt = _to_utc(dtend.dt) if dtend else None
-
         if start_dt > window_end:
             continue
         if end_dt and end_dt <= now:
@@ -125,18 +121,17 @@ def _parse_icalendar(ics_bytes, calendar, now, window_end):
         if not end_dt and start_dt + timedelta(minutes=30) <= now:
             continue
 
-        description = str(component.get("DESCRIPTION", "") or "")
-        location = str(component.get("LOCATION", "") or "")
-        location = location.replace("\\n", " ").replace("\n", " ").strip()
-        join_url = _extract_join_url(description, location)
+        desc = str(component.get("DESCRIPTION", "") or "")
+        loc  = str(component.get("LOCATION",    "") or "").replace("\\n", " ").replace("\n", " ").strip()
 
         events.append({
-            "uid": str(component.get("UID", "")) + "@" + start_dt.isoformat(),
-            "subject": str(component.get("SUMMARY", "") or "Sem titulo"),
-            "start": start_dt.isoformat().replace("+00:00", "Z"),
-            "end":   end_dt.isoformat().replace("+00:00", "Z") if end_dt else "",
-            "location": location,
-            "join_url": join_url,
+            "uid":            str(component.get("UID", "")) + "@" + start_dt.isoformat(),
+            "subject":        str(component.get("SUMMARY", "") or "Sem titulo"),
+            "start":          start_dt.isoformat().replace("+00:00", "Z"),
+            "end":            end_dt.isoformat().replace("+00:00", "Z") if end_dt else "",
+            "location":       loc,
+            "join_url":       _extract_join_url(desc, loc),
+            "status":         _event_status_icalendar(component),
             "calendar_name":  calendar.get("name", ""),
             "calendar_color": calendar.get("color", "#1e88e5"),
         })
@@ -144,9 +139,8 @@ def _parse_icalendar(ics_bytes, calendar, now, window_end):
 
 
 def _parse_builtin(ics_bytes, calendar, now, window_end):
-    """Fallback parser - does NOT expand recurring events."""
     text = ics_bytes.decode("utf-8", errors="replace")
-    text = re.sub(r"\r?\n[ \t]", "", text)  # unfold continuation lines
+    text = re.sub(r"\r?\n[ \t]", "", text)
     events = []
     has_rrule = False
 
@@ -154,7 +148,8 @@ def _parse_builtin(ics_bytes, calendar, now, window_end):
         block = block.split("END:VEVENT")[0]
 
         def get(prop):
-            m = re.search(rf"^{prop}(?:;[^:\n]*)?:(.+)$", block, re.MULTILINE)
+            pat = rf"^{re.escape(prop)}(?:;[^:\n]*)?:(.+)$"
+            m = re.search(pat, block, re.MULTILINE)
             return m.group(1).strip() if m else ""
 
         if "RRULE" in block:
@@ -163,7 +158,7 @@ def _parse_builtin(ics_bytes, calendar, now, window_end):
             continue
 
         raw_start = get("DTSTART")
-        raw_end = get("DTEND")
+        raw_end   = get("DTEND")
         if not raw_start or len(raw_start) == 8:
             continue
 
@@ -176,42 +171,36 @@ def _parse_builtin(ics_bytes, calendar, now, window_end):
                 return None
 
         start_dt = parse_dt(raw_start)
-        end_dt = parse_dt(raw_end) if raw_end else None
-        if not start_dt:
-            continue
-        if start_dt > window_end:
+        end_dt   = parse_dt(raw_end) if raw_end else None
+        if not start_dt or start_dt > window_end:
             continue
         if end_dt and end_dt <= now:
             continue
 
-        description = get("DESCRIPTION").replace("\\n", " ").replace("\\,", ",")
-        location = get("LOCATION").replace("\\n", " ").replace("\\,", ",")
-        join_url = _extract_join_url(description, location)
+        desc = get("DESCRIPTION").replace("\\n", " ").replace("\\,", ",")
+        loc  = get("LOCATION").replace("\\n", " ").replace("\\,", ",")
 
         events.append({
-            "uid": get("UID") + "@" + start_dt.isoformat(),
-            "subject": get("SUMMARY") or "Sem titulo",
-            "start": start_dt.isoformat().replace("+00:00", "Z"),
-            "end":   end_dt.isoformat().replace("+00:00", "Z") if end_dt else "",
-            "location": location,
-            "join_url": join_url,
+            "uid":            get("UID") + "@" + start_dt.isoformat(),
+            "subject":        get("SUMMARY") or "Sem titulo",
+            "start":          start_dt.isoformat().replace("+00:00", "Z"),
+            "end":            end_dt.isoformat().replace("+00:00", "Z") if end_dt else "",
+            "location":       loc,
+            "join_url":       _extract_join_url(desc, loc),
+            "status":         _event_status_builtin(block, get),
             "calendar_name":  calendar.get("name", ""),
             "calendar_color": calendar.get("color", "#1e88e5"),
         })
     return events, has_rrule
 
 
-# ── Main ─────────────────────────────────────────────────────────────────
-
 def _load_calendars():
-    """Load calendar list: prefer stdin (from applet), fall back to legacy file."""
     raw = ""
     if not sys.stdin.isatty():
         try:
             raw = sys.stdin.read().strip()
         except Exception:
             raw = ""
-
     if raw:
         try:
             data = json.loads(raw)
@@ -219,42 +208,32 @@ def _load_calendars():
                 return data
         except json.JSONDecodeError:
             pass
-
-    # Legacy single-URL config
     if os.path.exists(LEGACY_CONFIG_FILE):
         try:
             with open(LEGACY_CONFIG_FILE) as fh:
                 legacy = json.load(fh)
             if isinstance(legacy, dict) and legacy.get("ics_url"):
-                return [{
-                    "name": "Outlook",
-                    "url": legacy["ics_url"],
-                    "color": "#1e88e5",
-                    "enabled": True,
-                }]
+                return [{"name": "Outlook", "url": legacy["ics_url"],
+                         "color": "#1e88e5", "enabled": True}]
         except Exception:
             pass
-
     return []
 
 
 def main():
     calendars = _load_calendars()
     if not calendars:
-        print(json.dumps({
-            "error": "Nenhum calendario configurado. Clique direito no applet -> Configurar -> adicione uma URL ICS."
-        }))
+        print(json.dumps({"error": "Nenhum calendario configurado. Clique direito no applet -> Configurar -> adicione uma URL ICS."}))
         return
 
     try:
-        import icalendar  # noqa: F401
+        import icalendar  # noqa
         has_ical = True
     except ImportError:
         has_ical = False
 
     now = datetime.now(timezone.utc)
     window_end = now + timedelta(days=7, hours=1)
-
     all_events = []
     errors = []
     rrule_warning = False
@@ -270,7 +249,6 @@ def main():
         except Exception as exc:
             errors.append(f"{cal.get('name') or 'calendario'}: erro ao buscar ({exc})")
             continue
-
         try:
             if has_ical:
                 events, recurring_ok = _parse_icalendar(ics_bytes, cal, now, window_end)
@@ -293,9 +271,7 @@ def main():
     out = {"meetings": all_events}
     warnings = list(errors)
     if rrule_warning:
-        warnings.append(
-            "Eventos recorrentes podem nao aparecer. Instale: sudo apt install python3-icalendar python3-recurring-ical-events"
-        )
+        warnings.append("Eventos recorrentes podem nao aparecer. Instale: sudo apt install python3-icalendar python3-recurring-ical-events")
     if warnings:
         out["warnings"] = warnings
     print(json.dumps(out))

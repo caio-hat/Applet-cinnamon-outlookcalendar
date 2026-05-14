@@ -19,13 +19,13 @@
         },
         "panel-section": {
             "type": "section",
-            "title": "Painel",
-            "keys": ["show-in-panel", "label-max-chars"]
+            "title": "Painel e Popup",
+            "keys": ["show-in-panel", "label-max-chars", "show-tentative"]
         },
         "notifications-section": {
             "type": "section",
             "title": "Notificacoes",
-            "keys": ["notify-enabled", "notify-before"]
+            "keys": ["notify-enabled", "notify-before", "notify-conflicts"]
         },
         "refresh-section": {
             "type": "section",
@@ -58,10 +58,15 @@
         "units": "caracteres",
         "description": "Tamanho maximo do texto na barra"
     },
+    "show-tentative": {
+        "type": "switch",
+        "default": true,
+        "description": "Exibir reunioes pendentes/tentativas no popup"
+    },
     "notify-enabled": {
         "type": "switch",
         "default": true,
-        "description": "Enviar notificacao antes da reuniao"
+        "description": "Notificar antes da reuniao"
     },
     "notify-before": {
         "type": "spinbutton",
@@ -71,6 +76,11 @@
         "step": 1,
         "units": "minutos",
         "description": "Antecedencia da notificacao"
+    },
+    "notify-conflicts": {
+        "type": "switch",
+        "default": true,
+        "description": "Notificar quando houver conflito de horarios (urgencia critica)"
     },
     "refresh-interval": {
         "type": "spinbutton",

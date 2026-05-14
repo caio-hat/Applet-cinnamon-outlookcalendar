@@ -149,29 +149,29 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
     }
 
     // Open Cinnamon's per-applet settings dialog.
-    // Diagnostic version: uses GLib.spawn_async directly with explicit env
-    // and child_watch_add to capture the exit status. If xlet-settings exits
-    // quickly with a non-zero status, falls back to cinnamon-settings.
+    //
+    // xlet-settings argparse (from linuxmint/Cinnamon source):
+    //     xlet-settings <type> <uuid> [-i <instance_id>] [-t <tab>]
+    // The instance id is an optional FLAG, NOT a positional argument.
+    // Passing it positionally yields exit status 2 (argparse error).
     _openSettings() {
-        let id = String(this.instance_id != null ? this.instance_id : (this._instanceId != null ? this._instanceId : ""));
-        let argv = ["xlet-settings", "applet", UUID, id];
+        let id = this.instance_id != null ? this.instance_id : this._instanceId;
+        let argv = ["xlet-settings", "applet", UUID];
+        if (id != null && String(id) !== "") {
+            argv.push("--id", String(id));
+        }
         global.log("[" + UUID + "] _openSettings argv=" + argv.join(" "));
         this._menu.close(false);
 
         let startedAt = GLib.get_monotonic_time();
-        let envp = GLib.get_environ();
         let success = false;
         let pid = 0;
-
         try {
             [success, pid] = GLib.spawn_async(
-                null,
-                argv,
-                envp,
+                null, argv, GLib.get_environ(),
                 GLib.SpawnFlags.SEARCH_PATH | GLib.SpawnFlags.DO_NOT_REAP_CHILD,
                 null
             );
-            global.log("[" + UUID + "] spawn_async returned success=" + success + " pid=" + pid);
         } catch (e) {
             global.logError("[" + UUID + "] spawn_async threw: " + e);
             this._openSettingsFallback("spawn_async threw: " + e);
@@ -179,25 +179,22 @@ class OutlookCalendarApplet extends Applet.TextIconApplet {
         }
 
         if (!success || !pid) {
-            global.logError("[" + UUID + "] spawn_async failure (success=" + success + " pid=" + pid + ")");
-            this._openSettingsFallback("spawn_async returned failure");
+            this._openSettingsFallback("spawn_async returned success=" + success);
             return;
         }
 
         GLib.child_watch_add(GLib.PRIORITY_DEFAULT, pid, (childPid, status) => {
             let elapsedMs = Math.round((GLib.get_monotonic_time() - startedAt) / 1000);
-            global.log("[" + UUID + "] xlet-settings pid=" + childPid + " exited status=" + status + " after " + elapsedMs + "ms");
+            global.log("[" + UUID + "] xlet-settings pid=" + childPid + " exit status=" + status + " in " + elapsedMs + "ms");
             GLib.spawn_close_pid(childPid);
-            // If xlet-settings died fast with non-zero status, the window
-            // never showed: try cinnamon-settings as a fallback.
             if (status !== 0 && elapsedMs < 1500) {
-                this._openSettingsFallback("xlet-settings exit status=" + status + " in " + elapsedMs + "ms");
+                this._openSettingsFallback("xlet-settings exit status=" + status);
             }
         });
     }
 
     _openSettingsFallback(reason) {
-        global.log("[" + UUID + "] fallback triggered (" + reason + "), opening cinnamon-settings applets " + UUID);
+        global.log("[" + UUID + "] fallback (" + reason + "), opening cinnamon-settings applets " + UUID);
         try {
             Util.spawn(["cinnamon-settings", "applets", UUID]);
         } catch (e) {

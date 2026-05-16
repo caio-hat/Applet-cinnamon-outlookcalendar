@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# setup.sh - installs the Outlook Next Meeting Cinnamon applet locally.
+# setup.sh - installs the Next Meeting Cinnamon applet locally.
+# Works with Google Calendar, Outlook, Apple Calendar, Nextcloud,
+# and any RFC 5545 ICS/iCal feed.
 # Layout follows cinnamon-spices-applets conventions:
-#   ./outlook-calendar@caio-hat/files/outlook-calendar@caio-hat/<files>
+#   ./next-meeting@caio-hat/files/next-meeting@caio-hat/<files>
 set -euo pipefail
 
-APPLET_UUID="outlook-calendar@caio-hat"
+APPLET_UUID="next-meeting@caio-hat"
 APPLET_INSTALL_DIR="$HOME/.local/share/cinnamon/applets/$APPLET_UUID"
 LOCALE_BASE_DIR="$HOME/.local/share/locale"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,11 +19,11 @@ if [ ! -d "$SOURCE_DIR" ]; then
 fi
 
 echo "================================================"
-echo "  Outlook Calendar Applet - Setup"
+echo "  Next Meeting Applet - Setup"
 echo "================================================"
 echo ""
 
-# ── 1) Python deps ───────────────────────────────────────────────────────────────
+# ── 1) Python deps ─────────────────────────────────────────────────────────────
 have_py_deps() {
     python3 -c "import icalendar, recurring_ical_events" 2>/dev/null
 }
@@ -60,7 +62,7 @@ else
 fi
 echo ""
 
-# ── 2) Compile translations (po/*.po → .mo) ─────────────────────────────────────────────
+# ── 2) Compile translations (po/*.po → .mo) ─────────────────────────────────────────────────
 echo "STEP 2: Compiling translations..."
 if [ -d "$SOURCE_DIR/po" ]; then
     if command -v msgfmt >/dev/null 2>&1; then
@@ -89,7 +91,7 @@ else
 fi
 echo ""
 
-# ── 3) Install applet files ────────────────────────────────────────────────────────────
+# ── 3) Install applet files ─────────────────────────────────────────────────────────────────
 echo "STEP 3: Installing applet to $APPLET_INSTALL_DIR..."
 mkdir -p "$APPLET_INSTALL_DIR"
 for f in metadata.json applet.js stylesheet.css settings-schema.json fetch_meetings.py; do
@@ -103,7 +105,7 @@ chmod +x "$APPLET_INSTALL_DIR/fetch_meetings.py"
 echo "  OK."
 echo ""
 
-# ── 4) Instructions ──────────────────────────────────────────────────────────────────
+# ── 4) Instructions ─────────────────────────────────────────────────────────────────────
 echo "================================================"
 echo "  Setup complete!"
 echo "================================================"
@@ -111,7 +113,7 @@ echo ""
 echo "To apply changes:  cinnamon --replace &"
 echo ""
 echo "Add the applet:"
-echo "  Right-click panel -> 'Add applets to the panel' -> find 'Outlook Next Meeting' -> +"
+echo "  Right-click panel -> 'Add applets to the panel' -> find 'Next Meeting' -> +"
 echo ""
 echo "Configure:"
 echo "  Right-click the applet -> 'Configure...' (or click the applet -> Settings)"
@@ -123,4 +125,7 @@ echo "  cinnamon-looking-glass                    # GUI (Alt+F2 'lg')"
 echo ""
 echo "Translations:"
 echo "  Auto-detected via \$LANG. Contribute new ones via po/*.pot (see header)."
+echo ""
+echo "Compatible with: Google Calendar, Outlook, Apple Calendar, Nextcloud,"
+echo "Fastmail, Proton Calendar, and any RFC 5545 ICS/iCal feed."
 echo ""
